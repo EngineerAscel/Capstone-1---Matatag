@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
+import { Check, Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 import { supabase, supabaseConfigError } from './supabase.js';
 
 export default function App() {
@@ -9,6 +9,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [signInTransition, setSignInTransition] = useState(false);
   const [resetRequest, setResetRequest] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -27,6 +28,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (active) {
         if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
+        if (event === 'SIGNED_IN') setSignInTransition(true);
         setSession(nextSession);
         setAuthLoading(false);
       }
@@ -79,6 +81,13 @@ export default function App() {
       active = false;
     };
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!signInTransition || !role || roleLoading) return undefined;
+
+    const timer = window.setTimeout(() => setSignInTransition(false), 900);
+    return () => window.clearTimeout(timer);
+  }, [signInTransition, role, roleLoading]);
 
   useEffect(() => {
     if (!supabase || !session?.user?.id || roleLoading || role || !roleError) return;
@@ -161,29 +170,6 @@ export default function App() {
     setSubmitting(false);
   }
 
-  if (session && !passwordRecovery) {
-    return (
-      <main className="role-landing" aria-live="polite">
-        {roleLoading ? (
-          <p>Loading...</p>
-        ) : role ? (
-          <div className="role-landing-content">
-            <h1>{role === 'admin' ? 'Admin' : 'Staff'}</h1>
-            <button
-              type="button"
-              className="role-sign-out-button"
-              onClick={handleSignOut}
-              disabled={signingOut}
-            >
-              {signingOut ? 'Signing Out...' : 'Sign Out'}
-            </button>
-            {error && <p className="auth-message auth-error" role="alert">{error}</p>}
-          </div>
-        ) : <p>Returning to sign in...</p>}
-      </main>
-    );
-  }
-
   return (
     <main className="login-page">
       <div className="login-layout">
@@ -228,7 +214,40 @@ export default function App() {
 
         <section className="login-panel">
           <div className="login-content">
-            {passwordRecovery ? (
+            {session && !passwordRecovery ? (
+              signInTransition ? (
+                <section className="sign-in-success-card" aria-label="Sign-in successful" aria-live="polite">
+                  <span className="success-check" aria-hidden="true">
+                    <Check size={18} strokeWidth={2} />
+                  </span>
+                  <p className="success-badge">Access verified</p>
+                  <h1>Sign-in successful</h1>
+                  <p>Your assigned role determines your workspace.</p>
+                </section>
+              ) : (
+                <div className="login-card role-card" aria-live="polite">
+                  {roleLoading ? (
+                    <p className="login-description">Loading your workspace...</p>
+                  ) : role ? (
+                    <>
+                      <p className="login-eyebrow">Internal Workspace</p>
+                      <h2 className="login-title">{role === 'admin' ? 'Admin' : 'Staff'}</h2>
+                      <button
+                        type="button"
+                        className="sign-in-button"
+                        onClick={handleSignOut}
+                        disabled={signingOut}
+                      >
+                        {signingOut ? 'Signing Out...' : 'Sign Out'}
+                      </button>
+                      {error && <p className="auth-message auth-error" role="alert">{error}</p>}
+                    </>
+                  ) : (
+                    <p className="login-description">Returning to sign in...</p>
+                  )}
+                </div>
+              )
+            ) : passwordRecovery ? (
               <div className="login-card">
                 <p className="login-eyebrow">Account Recovery</p>
                 <h2 className="login-title">Choose a new password</h2>
