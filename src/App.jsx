@@ -8,9 +8,15 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [resetRequest, setResetRequest] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(Boolean(supabase));
   const [roleLoading, setRoleLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState('');
   const [roleError, setRoleError] = useState('');
 
@@ -18,8 +24,9 @@ export default function App() {
     if (!supabase) return undefined;
 
     let active = true;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (active) {
+        if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
         setSession(nextSession);
         setAuthLoading(false);
       }
@@ -73,6 +80,35 @@ export default function App() {
     };
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    if (!supabase || !session?.user?.id || roleLoading || role || !roleError) return;
+
+    setError(roleError);
+    supabase.auth.signOut().then(({ error: signOutError }) => {
+      if (signOutError) {
+        setError(`${roleError} Sign out failed: ${signOutError.message}`);
+      }
+    }).catch((signOutError) => {
+      const message = signOutError instanceof Error ? signOutError.message : String(signOutError);
+      setError(`${roleError} Sign out failed: ${message}`);
+    });
+  }, [session?.user?.id, roleLoading, role, roleError]);
+
+  async function handleSignOut() {
+    if (!supabase) return;
+
+    setSigningOut(true);
+    setError('');
+    try {
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) setError(signOutError.message);
+    } catch (signOutError) {
+      setError(signOutError instanceof Error ? signOutError.message : String(signOutError));
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   async function handleSignIn(event) {
     event.preventDefault();
     if (!supabase) return;
@@ -87,12 +123,65 @@ export default function App() {
     setSubmitting(false);
   }
 
-  async function handleSignOut() {
+  async function handlePasswordResetRequest(event) {
+    event.preventDefault();
     if (!supabase) return;
 
+    setSubmitting(true);
     setError('');
-    const { error: signOutError } = await supabase.auth.signOut();
-    if (signOutError) setError(signOutError.message);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin,
+    });
+    if (resetError) {
+      setError(resetError.message);
+    } else {
+      setResetSent(true);
+    }
+    setSubmitting(false);
+  }
+
+  async function handlePasswordUpdate(event) {
+    event.preventDefault();
+    if (!supabase) return;
+    if (newPassword !== confirmPassword) {
+      setError('The passwords do not match.');
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      setPasswordRecovery(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setSubmitting(false);
+  }
+
+  if (session && !passwordRecovery) {
+    return (
+      <main className="role-landing" aria-live="polite">
+        {roleLoading ? (
+          <p>Loading...</p>
+        ) : role ? (
+          <div className="role-landing-content">
+            <h1>{role === 'admin' ? 'Admin' : 'Staff'}</h1>
+            <button
+              type="button"
+              className="role-sign-out-button"
+              onClick={handleSignOut}
+              disabled={signingOut}
+            >
+              {signingOut ? 'Signing Out...' : 'Sign Out'}
+            </button>
+            {error && <p className="auth-message auth-error" role="alert">{error}</p>}
+          </div>
+        ) : <p>Returning to sign in...</p>}
+      </main>
+    );
   }
 
   return (
@@ -139,36 +228,82 @@ export default function App() {
 
         <section className="login-panel">
           <div className="login-content">
-            {session ? (
-              <div className="login-card role-card" aria-live="polite">
-                <p className="login-eyebrow">Internal Workspace</p>
-                {roleLoading ? (
-                  <>
-                    <h2 className="login-title">Checking access</h2>
-                    <p className="login-description">Verifying your assigned role...</p>
-                  </>
-                ) : role ? (
-                  <>
-                    <h2 className="login-title">{role === 'admin' ? 'Admin' : 'Staff'} access granted</h2>
-                    <p className="login-description">
-                      You are signed in as <strong>{role}</strong>.
-                    </p>
-                    <button type="button" className="sign-in-button" onClick={handleSignOut}>
-                      Sign Out
-                    </button>
-                  </>
+            {passwordRecovery ? (
+              <div className="login-card">
+                <p className="login-eyebrow">Account Recovery</p>
+                <h2 className="login-title">Choose a new password</h2>
+                <p className="login-description">Enter and confirm your new password.</p>
+                <form className="login-form" onSubmit={handlePasswordUpdate}>
+                  <label htmlFor="new-password" className="form-label">New password</label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    className="login-input"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    required
+                    minLength={8}
+                  />
+                  <label htmlFor="confirm-password" className="password-label">Confirm new password</label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    className="login-input"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    required
+                    minLength={8}
+                  />
+                  {error && <p className="auth-message auth-error" role="alert">{error}</p>}
+                  <button type="submit" className="sign-in-button" disabled={!supabase || submitting}>
+                    {submitting ? 'Updating Password...' : 'Update Password'}
+                  </button>
+                </form>
+              </div>
+            ) : resetRequest ? (
+              <div className="login-card">
+                <p className="login-eyebrow">Account Recovery</p>
+                <h2 className="login-title">Reset your password</h2>
+                <p className="login-description">
+                  We’ll email you a secure link to choose a new password.
+                </p>
+                {resetSent ? (
+                  <p className="auth-message auth-success" role="status">
+                    If an account exists for this email, a password reset link has been sent.
+                    Check your inbox and spam folder.
+                  </p>
                 ) : (
-                  <>
-                    <h2 className="login-title">Access not assigned</h2>
-                    <p className="login-description">
-                      {roleError || 'Your account does not have an assigned role.'}
-                    </p>
-                    <button type="button" className="sign-in-button" onClick={handleSignOut}>
-                      Sign Out
+                  <form className="login-form" onSubmit={handlePasswordResetRequest}>
+                    <label htmlFor="reset-email" className="form-label">Email</label>
+                    <input
+                      id="reset-email"
+                      type="email"
+                      autoComplete="username"
+                      placeholder="Enter your email"
+                      className="login-input"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      required
+                    />
+                    {error && <p className="auth-message auth-error" role="alert">{error}</p>}
+                    <button type="submit" className="sign-in-button" disabled={!supabase || submitting}>
+                      {submitting ? 'Sending...' : 'Send Reset Link'}
                     </button>
-                  </>
+                  </form>
                 )}
-                {error && <p className="auth-message auth-error" role="alert">{error}</p>}
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={() => {
+                    setResetRequest(false);
+                    setResetSent(false);
+                    setError('');
+                  }}
+                >
+                  Back to sign in
+                </button>
               </div>
             ) : (
               <div className="login-card">
@@ -213,6 +348,17 @@ export default function App() {
                         : <Eye size={16} strokeWidth={1.75} />}
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    className="text-link reset-link"
+                    onClick={() => {
+                      setResetRequest(true);
+                      setError('');
+                    }}
+                  >
+                    Forgot password?
+                  </button>
 
                   {error && <p className="auth-message auth-error" role="alert">{error}</p>}
                   {supabaseConfigError && (

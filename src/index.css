@@ -622,6 +622,22 @@ input {
   @apply min-h-screen bg-[#f6f5f3] text-[#1a1a1a] antialiased;
 }
 
+.role-landing {
+  @apply grid min-h-screen place-items-center bg-[#f6f5f3] px-6 text-[#1a1a1a];
+}
+
+.role-landing-content {
+  @apply flex flex-col items-center;
+}
+
+.role-landing h1 {
+  @apply m-0 text-5xl font-semibold;
+}
+
+.role-sign-out-button {
+  @apply mt-6 rounded-md bg-[#c8a35e] px-5 py-2.5 text-sm font-semibold text-[#1a1a1a] transition hover:bg-[#b99350] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c8a35e]/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
 .login-layout {
   @apply flex min-h-screen;
 }
@@ -736,6 +752,18 @@ input {
 
 .auth-error {
   @apply text-[#a12d24];
+}
+
+.auth-success {
+  @apply text-[#26734d];
+}
+
+.text-link {
+  @apply mt-4 cursor-pointer border-0 bg-transparent p-0 text-[12px] font-medium text-[#765b2c] underline underline-offset-2 hover:text-[#4f3b1b] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c8a35e]/50;
+}
+
+.reset-link {
+  @apply mt-3;
 }
 
 .authorization-note {
