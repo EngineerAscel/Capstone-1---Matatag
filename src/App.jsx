@@ -986,7 +986,6 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (active) {
         if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
-        if (event === 'SIGNED_IN') setSignInTransition(true);
         setSession(nextSession);
         setAuthLoading(false);
       }
@@ -1086,7 +1085,11 @@ export default function App() {
       email: email.trim(),
       password,
     });
-    if (signInError) setError(signInError.message);
+    if (signInError) {
+      setError(signInError.message);
+    } else {
+      setSignInTransition(true);
+    }
     setSubmitting(false);
   }
 
